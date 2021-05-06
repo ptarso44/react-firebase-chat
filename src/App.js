@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { render } from 'react-dom';
 import './App.css';
 
 import firebase from 'firebase/app';
@@ -18,19 +19,21 @@ firebase.initializeApp({
   measurementId: "G-R9QBEF2CQN",
 });
 
-const auth = firebase.auth;
+const auth = firebase.auth();
 const firestore = firebase.firestore();
 
-const [user] = useAuthState(auth);
 
 function App() {
+  
+  const [user] = useAuthState(auth);
+
   return (
     <div className="App">
       <header className="App-header">
-        <section>
-          { user ? <ChatRoom /> : <SignIn /> }
-        </section>
+        <h1>Chat Room</h1>
+        <SignOut />
       </header>
+      <section>{user ? <ChatRoom /> : <SignIn />}</section>
     </div>
   );
 }
@@ -50,20 +53,52 @@ function SignIn() {
 }
 
 function SignOut() {
-  return auth.currentUser && (
-    <button onclick={ () => auth.signout() }>Sign Out</button>
+  return (
+    auth.currentUser && (
+      <button className="sign-out" onClick={() => auth.signOut()}>
+        Sign Out
+      </button>
+    )
   );
 }
 
 function ChatRoom() {
+
+  const dummy = useRef();
+
   const messageRef = firestore.collection('messages');
   const query = messageRef.orderBy('createdAt').limit(25);
 
   const [messages] = useCollectionData(query, { idField: 'id'});
+  const [ formValue, setFormValue ] = useState('');
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+
+    const {uid} = auth.currentUser;
+
+    await messageRef.add({
+      text: formValue,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      uid//,
+      //photoURL
+    });
+
+    setFormValue('');
+  }
 
   return (
     <div>
-      { messages && messages.map( msg => <ChatMessage key={msg.id} message={msg} /> ) }
+      <main>
+        { messages && messages.map( msg => <ChatMessage key={msg.id} message={msg} /> ) }
+      </main>
+      <div ref={dummy}></div>
+      <div id="sendMsg">
+        <form onSubmit={sendMessage}>
+          <input value={formValue} onChange={(e) => {setFormValue( e.target.value )}}/>
+          <button type='submit'>Send</button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -72,7 +107,18 @@ function ChatMessage(props) {
 
   const { text, uid } = props.message;
 
-  return <p>{text}</p>
+  const messageClass = uid === auth.currentUser.uid ? 'sent': 'received';
+
+  return (
+
+    <div className={`message ${messageClass}`}>
+      <p>{text}</p>
+    </div>
+
+  );
 }
 
 export default App;
+
+let rootElem = document.querySelector('#root');
+render(<App/>, rootElem);
